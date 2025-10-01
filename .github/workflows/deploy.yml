@@ -1,0 +1,62 @@
+name: Deploy to GitHub Pages
+
+on:
+  push:
+    branches: [ main ]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+    - name: Checkout
+      uses: actions/checkout@v3
+    
+    - name: Setup Pages
+      uses: actions/configure-pages@v2
+      
+    - name: Create API index file
+      run: |
+        mkdir -p _site
+        cat > _site/index.html << 'EOF'
+        <!DOCTYPE html>
+        <html>
+        <head>
+            <title>Bing 图片 API</title>
+        </head>
+        <body>
+            <h1>Bing 每日图片 API</h1>
+            <p>使用方式：</p>
+            <ul>
+                <li>今日图片：/pic/today</li>
+                <li>随机图片：/pic/random</li>
+                <li>指定日期：/pic/20231015.jpg</li>
+            </ul>
+        </body>
+        </html>
+        EOF
+        
+        # 创建重定向文件
+        cat > _site/_redirects << 'EOF'
+        /pic/today    /pic/20231015.jpg 302
+        /pic/random   /pic/random 200
+        EOF
+        
+        # 复制图片和JSON文件到_site目录
+        cp -r pic/ _site/
+        cp -r json/ _site/
+    
+    - name: Upload artifact
+      uses: actions/upload-pages-artifact@v1
+      with:
+        path: ./_site
+
+    - name: Deploy to GitHub Pages
+      id: deployment
+      uses: actions/deploy-pages@v1
+    
