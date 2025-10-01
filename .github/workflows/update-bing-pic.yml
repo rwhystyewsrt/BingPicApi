@@ -1,0 +1,44 @@
+name: Update Bing Picture Daily
+
+on:
+  schedule:
+    - cron: '0 0 * * *' # 每天UTC时间00:00（北京时间08:00）运行
+  workflow_dispatch: # 允许手动触发
+
+jobs:
+  update:
+    runs-on: ubuntu-latest
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v3
+      with:
+        token: ${{ secrets.PERSONAL_TOKEN }}
+
+    - name: Get Bing Picture
+      run: |
+        # 创建一个目录来存放图片和元数据
+        mkdir -p pic json
+
+        # 使用curl获取Bing今日图片的JSON信息
+        JSON_DATA=$(curl -s "https://www.bing.com/HPImageArchive.aspx?format=js&idx=0&n=1&mkt=en-US")
+
+        # 从JSON中提取图片的URL后缀和日期
+        IMG_URL_SUFFIX=$(echo "$JSON_DATA" | grep -oP '"url":"[^"]*"' | cut -d'"' -f4)
+        IMG_DATE=$(echo "$JSON_DATA" | grep -oP '"startdate":"[^"]*"' | cut -d'"' -f4)
+
+        # 构建完整的图片URL
+        IMG_URL="https://www.bing.com$IMG_URL_SUFFIX"
+
+        # 下载图片
+        curl -s -o "pic/$IMG_DATE.jpg" "$IMG_URL"
+
+        # 保存图片的JSON信息
+        echo "$JSON_DATA" > "json/$IMG_DATE.json"
+
+    - name: Commit and Push changes
+      run: |
+        git config --local user.email "action@github.com"
+        git config --local user.name "GitHub Action"
+        git add .
+        git commit -m "Update Bing picture for $(date +%Y%m%d)" || exit 0
+        git push
