@@ -1,0 +1,62 @@
+name: Debug Bing Wallpaper
+
+on:
+  workflow_dispatch: # 仅手动触发，用于调试
+  push:
+    branches: [ main ]
+
+jobs:
+  debug-bing:
+    runs-on: ubuntu-latest
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+
+    - name: Debug current files
+      run: |
+        echo "=== 当前文件状态 ==="
+        ls -la
+        echo "=== pic目录内容 ==="
+        ls -la pic/ || echo "pic目录不存在"
+        echo "=== api目录内容 ==="
+        ls -la api/ || echo "api目录不存在"
+        echo "=== api/today目录内容 ==="
+        ls -la api/today/ || echo "api/today目录不存在"
+
+    - name: Test Bing API connection
+      run: |
+        echo "=== 测试Bing API连接 ==="
+        curl -s "https://www.bing.com/HPImageArchive.aspx?format=js&idx=0&n=1&mkt=en-US" | head -c 500
+        echo ""
+        echo "=== 完整的API响应 ==="
+        curl -s "https://www.bing.com/HPImageArchive.aspx?format=js&idx=0&n=1&mkt=en-US"
+
+    - name: Test image download
+      run: |
+        echo "=== 测试图片下载 ==="
+        # 获取今天的图片信息
+        JSON_DATA=$(curl -s "https://www.bing.com/HPImageArchive.aspx?format=js&idx=0&n=1&mkt=en-US")
+        echo "API响应: $JSON_DATA"
+        
+        # 提取图片URL和日期
+        IMG_URL_SUFFIX=$(echo "$JSON_DATA" | grep -oP '"url":"[^"]*"' | cut -d'"' -f4)
+        IMG_DATE=$(echo "$JSON_DATA" | grep -oP '"startdate":"[^"]*"' | cut -d'"' -f4)
+        
+        echo "图片后缀: $IMG_URL_SUFFIX"
+        echo "图片日期: $IMG_DATE"
+        
+        if [ -n "$IMG_URL_SUFFIX" ]; then
+          IMG_URL="https://www.bing.com$IMG_URL_SUFFIX"
+          echo "完整图片URL: $IMG_URL"
+          
+          # 尝试下载图片
+          mkdir -p pic
+          if curl -s -o "pic/test_$IMG_DATE.jpg" "$IMG_URL"; then
+            echo "✅ 图片下载成功"
+            ls -la "pic/test_$IMG_DATE.jpg"
+          else
+            echo "❌ 图片下载失败"
+          fi
+        else
+          echo "❌ 无法提取图片URL"
+        fi
