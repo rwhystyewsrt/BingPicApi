@@ -5,11 +5,9 @@ on:
     # 每10分钟检查一次新图片 (UTC时间)
     - cron: '*/10 * * * *'
   workflow_dispatch: # 允许手动触发
-  push:
-    branches: [ main ]
 
 jobs:
-  check-and-update:
+  update-bing:
     runs-on: ubuntu-latest
     steps:
     - name: Checkout repository
@@ -17,170 +15,116 @@ jobs:
       with:
         token: ${{ secrets.PERSONAL_TOKEN || secrets.GITHUB_TOKEN }}
 
-    - name: Setup Python
-      uses: actions/setup-python@v4
-      with:
-        python-version: '3.x'
-
-    - name: Install dependencies
-      run: |
-        python -m pip install --upgrade pip
-        pip install requests
-
-    - name: Get Bing Wallpaper
+    - name: Setup environment
       run: |
         mkdir -p pic json api/today
-        
-        # 使用Python脚本获取Bing图片
-        cat > bing_wallpaper.py << 'EOF'
-        import requests
-        import json
-        import os
-        from datetime import datetime, timedelta
-        import time
-        
-        def get_bing_image():
-            try:
-                # 获取 Bing 图片数据
-                url = "https://www.bing.com/HPImageArchive.aspx?format=js&idx=0&n=1&mkt=en-US"
-                response = requests.get(url, timeout=30)
-                data = response.json()
-                
-                image_data = data['images'][0]
-                img_url_suffix = image_data['url']
-                img_date = image_data['startdate']
-                full_img_url = f"https://www.bing.com{img_url_suffix}"
-                
-                print(f"Image URL: {full_img_url}")
-                print(f"Image Date: {img_date}")
-                
-                # 下载图片
-                img_response = requests.get(full_img_url, timeout=60)
-                pic_filename = f"pic/{img_date}.jpg"
-                with open(pic_filename, "wb") as f:
-                    f.write(img_response.content)
-                print(f"Downloaded image to {pic_filename}")
-                
-                # 保存 JSON 数据
-                json_filename = f"json/{img_date}.json"
-                with open(json_filename, "w") as f:
-                    json.dump(image_data, f, indent=2)
-                
-                return img_date, True
-            except Exception as e:
-                print(f"Error getting Bing image: {e}")
-                return None, False
-        
-        def copy_todays_wallpaper():
-            try:
-                # 复制当天图片为固定名称
-                today = datetime.now().strftime('%Y%m%d')
-                source_file = f"pic/{today}.jpg"
-                target_file = "api/today/1920x1080.jpg"
-                
-                if os.path.exists(source_file):
-                    # 复制文件
-                    with open(source_file, 'rb') as src, open(target_file, 'wb') as dst:
-                        dst.write(src.read())
-                    print(f"Successfully copied {source_file} to {target_file}")
-                    return True
-                else:
-                    print(f"Today's image {source_file} not found")
-                    return False
-            except Exception as e:
-                print(f"Error copying wallpaper: {e}")
-                return False
-        
-        def should_copy_wallpaper():
-            # 判断是否应该复制壁纸（每2小时一次）
-            try:
-                if os.path.exists("api/today/1920x1080.jpg"):
-                    file_time = os.path.getmtime("api/today/1920x1080.jpg")
-                    current_time = time.time()
-                    # 如果文件修改时间在2小时内，不复制
-                    if current_time - file_time < 2 * 60 * 60:  # 2小时
-                        print("Wallpaper was updated within last 2 hours, skipping copy")
-                        return False
-                return True
-            except:
-                return True
-        
-        # 主执行逻辑
-        current_date, success = get_bing_image()
-        
-        if success:
-            # 更新日期索引
-            dates = set()
-            if os.path.exists('dates.txt'):
-                with open('dates.txt', 'r') as f:
-                    dates = set(line.strip() for line in f if line.strip())
-            
-            if current_date:
-                dates.add(current_date)
-            
-            with open('dates.txt', 'w') as f:
-                for date in sorted(dates):
-                    f.write(f"{date}\n")
-            
-            print(f"Available dates: {len(dates)}")
-            
-            # 检查是否需要复制当天壁纸
-            today = datetime.now().strftime('%Y%m%d')
-            if current_date == today and should_copy_wallpaper():
-                copy_todays_wallpaper()
-            elif current_date != today:
-                print(f"Current image date {current_date} is not today {today}, skipping copy")
-        else:
-            print("Failed to get Bing image, will try again later")
-        
-        EOF
-        
-        python bing_wallpaper.py
+        echo "当前时间: $(date)"
+        echo "UTC时间: $(date -u)"
 
-    - name: Create API redirect files
+    - name: Get Bing image data
+      id: bing-data
       run: |
-        # 创建 API 重定向文件
-        mkdir -p api
+        # 获取Bing图片数据
+        echo "正在获取Bing图片数据..."
+        JSON_RESPONSE=$(curl -s "https://www.bing.com/HPImageArchive.aspx?format=js&idx=0&n=1&mkt=en-US")
+        echo "Bing API响应: $JSON_RESPONSE"
         
-        # 创建今日图片重定向
-        cat > api/today.html << 'EOF'
-        <!DOCTYPE html>
-        <html>
-        <head>
-            <meta http-equiv="refresh" content="0; url=1920x1080.jpg">
-        </head>
-        <body>
-            <p>Redirecting to today's wallpaper...</p>
-        </body>
-        </html>
-        EOF
+        # 提取图片信息
+        IMG_URL_SUFFIX=$(echo "$JSON_RESPONSE" | grep -oP '"url":"[^"]*"' | cut -d'"' -f4)
+        IMG_DATE=$(echo "$JSON_RESPONSE" | grep -oP '"startdate":"[^"]*"' | cut -d'"' -f4)
+        IMG_TITLE=$(echo "$JSON_RESPONSE" | grep -oP '"title":"[^"]*"' | cut -d'"' -f4)
         
-        # 创建主API页面
-        cat > api/index.html << 'EOF'
-        <!DOCTYPE html>
-        <html>
-        <head>
-            <title>Bing Wallpaper API</title>
-            <style>
-                body { font-family: Arial, sans-serif; margin: 40px; }
-                .endpoint { background: #f5f5f5; padding: 15px; margin: 10px 0; border-radius: 5px; }
-            </style>
-        </head>
-        <body>
-            <h1>Bing Wallpaper API</h1>
-            <div class="endpoint">
-                <h3>今日壁纸</h3>
-                <code>GET /api/today/1920x1080.jpg</code>
-            </div>
-            <p>壁纸每10分钟更新，固定文件名每2小时更新一次</p>
-        </body>
-        </html>
-        EOF
+        echo "图片URL后缀: $IMG_URL_SUFFIX"
+        echo "图片日期: $IMG_DATE"
+        echo "图片标题: $IMG_TITLE"
+        
+        # 设置输出变量
+        echo "img_url_suffix=$IMG_URL_SUFFIX" >> $GITHUB_OUTPUT
+        echo "img_date=$IMG_DATE" >> $GITHUB_OUTPUT
+        echo "img_title=$IMG_TITLE" >> $GITHUB_OUTPUT
+        
+        # 保存原始JSON
+        echo "$JSON_RESPONSE" > "json/$IMG_DATE.json"
 
-    - name: Commit and Push changes
+    - name: Download and process image
+      run: |
+        IMG_URL_SUFFIX="${{ steps.bing-data.outputs.img_url_suffix }}"
+        IMG_DATE="${{ steps.bing-data.outputs.img_date }}"
+        
+        if [ -z "$IMG_URL_SUFFIX" ]; then
+          echo "❌ 无法获取图片URL，跳过下载"
+          exit 0
+        fi
+        
+        echo "正在下载图片: $IMG_DATE"
+        IMG_URL="https://www.bing.com$IMG_URL_SUFFIX"
+        
+        # 下载图片到pic目录
+        if curl -s -L -o "pic/$IMG_DATE.jpg" "$IMG_URL"; then
+          echo "✅ 图片下载成功: pic/$IMG_DATE.jpg"
+          ls -la "pic/$IMG_DATE.jpg"
+        else
+          echo "❌ 图片下载失败"
+          exit 1
+        fi
+
+    - name: Update today's wallpaper
+      run: |
+        IMG_DATE="${{ steps.bing-data.outputs.img_date }}"
+        TODAY=$(date -u +%Y%m%d)  # 使用UTC时间
+        
+        echo "图片日期: $IMG_DATE"
+        echo "今天日期: $TODAY"
+        
+        # 检查是否是今天的图片
+        if [ "$IMG_DATE" = "$TODAY" ]; then
+          echo "🔄 更新今日壁纸..."
+          
+          # 复制到api/today目录
+          cp "pic/$IMG_DATE.jpg" "api/today/1920x1080.jpg"
+          echo "✅ 今日壁纸已更新: api/today/1920x1080.jpg"
+          
+          # 创建访问日志
+          echo "$(date -u): Updated today's wallpaper - $IMG_DATE" >> api/update.log
+        else
+          echo "📅 图片不是今天的，跳过更新今日壁纸"
+        fi
+
+    - name: Update dates index
+      run: |
+        IMG_DATE="${{ steps.bing-data.outputs.img_date }}"
+        
+        if [ -n "$IMG_DATE" ]; then
+          # 更新日期索引
+          if [ -f dates.txt ]; then
+            if ! grep -q "$IMG_DATE" dates.txt; then
+              echo "$IMG_DATE" >> dates.txt
+              echo "✅ 添加新日期到索引: $IMG_DATE"
+            else
+              echo "📝 日期已存在于索引: $IMG_DATE"
+            fi
+          else
+            echo "$IMG_DATE" > dates.txt
+            echo "✅ 创建日期索引: $IMG_DATE"
+          fi
+          
+          # 显示当前所有日期
+          echo "当前所有日期:"
+          cat dates.txt || echo "无日期记录"
+        fi
+
+    - name: Commit and push changes
       run: |
         git config --local user.email "action@github.com"
         git config --local user.name "GitHub Action"
-        git add .
-        git commit -m "Auto-update: $(date +%Y%m%d-%H%M%S)" || echo "No changes to commit"
-        git push || echo "Push failed or no changes"
+        
+        # 检查是否有更改
+        if git diff --quiet && git diff --staged --quiet; then
+          echo "📝 没有更改需要提交"
+        else
+          echo "🔄 提交更改..."
+          git add .
+          git commit -m "Auto-update: $(date -u +%Y%m%d-%H%M%S)"
+          git push
+          echo "✅ 更改已推送"
+        fi
