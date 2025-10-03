@@ -1,0 +1,251 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Bing 每日图片 API</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            line-height: 1.6;
+            color: #333;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+        
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 15px;
+            box-shadow: 0 20px 40px rgba(0,0,0,0.1);
+            overflow: hidden;
+        }
+        
+        .header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 40px 20px;
+            text-align: center;
+        }
+        
+        .header h1 {
+            font-size: 2.5em;
+            margin-bottom: 10px;
+        }
+        
+        .header p {
+            font-size: 1.2em;
+            opacity: 0.9;
+        }
+        
+        .content {
+            padding: 40px;
+        }
+        
+        .api-section {
+            margin-bottom: 40px;
+        }
+        
+        .api-section h2 {
+            color: #667eea;
+            margin-bottom: 20px;
+            border-bottom: 2px solid #f0f0f0;
+            padding-bottom: 10px;
+        }
+        
+        .endpoint {
+            background: #f8f9fa;
+            border-left: 4px solid #667eea;
+            padding: 20px;
+            margin: 15px 0;
+            border-radius: 0 8px 8px 0;
+        }
+        
+        .method {
+            display: inline-block;
+            background: #667eea;
+            color: white;
+            padding: 4px 12px;
+            border-radius: 4px;
+            font-weight: bold;
+            margin-right: 10px;
+        }
+        
+        .url {
+            font-family: 'Courier New', monospace;
+            background: #2d3748;
+            color: #e2e8f0;
+            padding: 15px;
+            border-radius: 6px;
+            margin: 10px 0;
+            word-break: break-all;
+        }
+        
+        .example {
+            background: #e8f4fd;
+            border: 1px solid #bee5eb;
+            border-radius: 6px;
+            padding: 15px;
+            margin: 15px 0;
+        }
+        
+        .btn {
+            display: inline-block;
+            background: #667eea;
+            color: white;
+            padding: 12px 24px;
+            text-decoration: none;
+            border-radius: 6px;
+            font-weight: bold;
+            transition: all 0.3s ease;
+            margin: 5px;
+        }
+        
+        .btn:hover {
+            background: #5a6fd8;
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(0,0,0,0.2);
+        }
+        
+        .image-preview {
+            text-align: center;
+            margin: 30px 0;
+        }
+        
+        .image-preview img {
+            max-width: 100%;
+            border-radius: 10px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.3);
+        }
+        
+        @media (max-width: 768px) {
+            .container {
+                margin: 10px;
+            }
+            
+            .content {
+                padding: 20px;
+            }
+            
+            .header h1 {
+                font-size: 2em;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🌅 Bing 每日图片 API</h1>
+            <p>提供高质量的 Bing 每日壁纸接口服务</p>
+        </div>
+        
+        <div class="content">
+            <div class="api-section">
+                <h2>📚 API 接口说明</h2>
+                <p>所有接口返回图片的直接链接，可直接在 img 标签中使用。</p>
+                
+                <div class="endpoint">
+                    <span class="method">GET</span>
+                    <strong>今日图片</strong>
+                    <div class="url" id="todayUrl">/api/today</div>
+                    <p>获取今日的 Bing 每日图片</p>
+                    <a href="#" class="btn" id="todayBtn">测试今日图片</a>
+                </div>
+                
+                <div class="endpoint">
+                    <span class="method">GET</span>
+                    <strong>随机图片</strong>
+                    <div class="url" id="randomUrl">/api/random</div>
+                    <p>从历史图片中随机返回一张</p>
+                    <a href="#" class="btn" id="randomBtn">测试随机图片</a>
+                </div>
+                
+                <div class="endpoint">
+                    <span class="method">GET</span>
+                    <strong>指定日期图片</strong>
+                    <div class="url">/api/date/YYYYMMDD</div>
+                    <p>获取指定日期的图片，例如：/api/date/20231015</p>
+                </div>
+            </div>
+            
+            <div class="image-preview">
+                <h2>🖼️ 图片预览</h2>
+                <div id="imageContainer">
+                    <p>点击上面的测试按钮查看图片预览</p>
+                </div>
+            </div>
+            
+            <div class="api-section">
+                <h2>💻 使用示例</h2>
+                <div class="example">
+                    <h4>HTML 中使用：</h4>
+                    <div class="url">&lt;img src="https://你的域名/api/today" alt="Bing今日图片"&gt;</div>
+                </div>
+                
+                <div class="example">
+                    <h4>JavaScript 中使用：</h4>
+                    <div class="url">
+// 获取今日图片<br>
+const todayImage = 'https://你的域名/api/today';<br>
+<br>
+// 获取随机图片<br>
+const randomImage = 'https://你的域名/api/random';
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // 设置基础 URL
+        const baseUrl = window.location.origin;
+        
+        // 更新显示的 URL
+        document.getElementById('todayUrl').textContent = baseUrl + '/api/today';
+        document.getElementById('randomUrl').textContent = baseUrl + '/api/random';
+        
+        // 今日图片测试
+        document.getElementById('todayBtn').addEventListener('click', function(e) {
+            e.preventDefault();
+            testImage('today');
+        });
+        
+        // 随机图片测试
+        document.getElementById('randomBtn').addEventListener('click', function(e) {
+            e.preventDefault();
+            testImage('random');
+        });
+        
+        function testImage(type) {
+            const imageUrl = `${baseUrl}/api/${type}`;
+            const imageContainer = document.getElementById('imageContainer');
+            
+            imageContainer.innerHTML = `
+                <div style="text-align: center;">
+                    <p>加载中...</p>
+                    <img src="${imageUrl}" 
+                         alt="${type === 'today' ? '今日图片' : '随机图片'}" 
+                         style="max-width: 600px; border-radius: 10px;"
+                         onload="this.style.display='block'"
+                         onerror="this.style.display='none'; document.getElementById('error').style.display='block'">
+                    <div id="error" style="display: none; color: red; margin-top: 10px;">
+                        图片加载失败，请检查 API 服务状态
+                    </div>
+                    <p style="margin-top: 10px;">
+                        <a href="${imageUrl}" target="_blank" class="btn">在新窗口打开</a>
+                    </p>
+                </div>
+            `;
+        }
+    </script>
+</body>
+</html>
