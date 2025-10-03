@@ -1,0 +1,72 @@
+name: Deploy to GitHub Pages
+
+on:
+  push:
+    branches: [ main ]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+    - name: Checkout
+      uses: actions/checkout@v4
+    
+    - name: Setup Pages
+      uses: actions/configure-pages@v4
+      
+    - name: Create website structure
+      run: |
+        # 创建必要的网站文件
+        echo "你的域名.com" > CNAME
+        touch .nojekyll
+        
+        # 创建主页
+        cat > index.html << 'EOF'
+        <!DOCTYPE html>
+        <html>
+        <head>
+            <title>Bing Wallpaper API</title>
+            <meta http-equiv="refresh" content="0; url=/api/">
+        </head>
+        <body>
+            <p>Redirecting to API documentation...</p>
+        </body>
+        </html>
+        EOF
+        
+        # 确保api目录存在
+        mkdir -p api/today
+        
+        # 如果api/today/1920x1080.jpg不存在，创建一个占位符
+        if [ ! -f "api/today/1920x1080.jpg" ]; then
+          echo "Creating placeholder image file"
+          mkdir -p api/today
+          # 创建一个简单的SVG作为占位符
+          cat > api/today/1920x1080.jpg.html << 'EOF'
+        <!DOCTYPE html>
+        <html>
+        <head>
+            <title>Bing Wallpaper</title>
+        </head>
+        <body>
+            <p>Wallpaper will be available after the first successful update.</p>
+            <p>Check the GitHub Actions for update status.</p>
+        </body>
+        </html>
+        EOF
+        fi
+    
+    - name: Upload artifact
+      uses: actions/upload-pages-artifact@v3
+      with:
+        path: .
+        
+    - name: Deploy to GitHub Pages
+      id: deployment
+      uses: actions/deploy-pages@v4
