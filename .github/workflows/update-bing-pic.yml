@@ -1,12 +1,15 @@
-name: Update Bing Picture Daily
+name: Update Bing Wallpaper
 
 on:
   schedule:
-    - cron: '0 0 * * *' # 每天UTC时间00:00（北京时间08:00）运行
+    # 每10分钟检查一次新图片 (UTC时间，注意时区转换)
+    - cron: '*/10 * * * *'
+    # 每2小时复制一次当天图片为固定名称 (UTC时间)
+    - cron: '0 */2 * * *'
   workflow_dispatch: # 允许手动触发
 
 jobs:
-  update:
+  check-and-update:
     runs-on: ubuntu-latest
     steps:
     - name: Checkout repository
@@ -14,31 +17,104 @@ jobs:
       with:
         token: ${{ secrets.PERSONAL_TOKEN }}
 
-    - name: Get Bing Picture
+    - name: Setup Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.x'
+
+    - name: Install dependencies
       run: |
-        # 创建一个目录来存放图片和元数据
-        mkdir -p pic json
+        python -m pip install --upgrade pip
+        pip install requests
 
-        # 使用curl获取Bing今日图片的JSON信息
-        JSON_DATA=$(curl -s "https://www.bing.com/HPImageArchive.aspx?format=js&idx=0&n=1&mkt=en-US")
-
-        # 从JSON中提取图片的URL后缀和日期
-        IMG_URL_SUFFIX=$(echo "$JSON_DATA" | grep -oP '"url":"[^"]*"' | cut -d'"' -f4)
-        IMG_DATE=$(echo "$JSON_DATA" | grep -oP '"startdate":"[^"]*"' | cut -d'"' -f4)
-
-        # 构建完整的图片URL
-        IMG_URL="https://www.bing.com$IMG_URL_SUFFIX"
-
-        # 下载图片
-        curl -s -o "pic/$IMG_DATE.jpg" "$IMG_URL"
-
-        # 保存图片的JSON信息
-        echo "$JSON_DATA" > "json/$IMG_DATE.json"
+    - name: Get Bing Wallpaper
+      run: |
+        mkdir -p pic json api
+        
+        # 使用Python脚本获取Bing图片
+        cat > bing_wallpaper.py << 'EOF'
+        import requests
+        import json
+        import os
+        from datetime import datetime
+        
+        def get_bing_image():
+            # 获取 Bing 图片数据
+            url = "https://www.bing.com/HPImageArchive.aspx?format=js&idx=0&n=1&mkt=en-US"
+            response = requests.get(url)
+            data = response.json()
+            
+            image_data = data['images'][0]
+            img_url_suffix = image_data['url']
+            img_date = image_data['startdate']
+            full_img_url = f"https://www.bing.com{img_url_suffix}"
+            
+            print(f"Image URL: {full_img_url}")
+            print(f"Image Date: {img_date}")
+            
+            # 下载图片
+            img_response = requests.get(full_img_url)
+            pic_filename = f"pic/{img_date}.jpg"
+            with open(pic_filename, "wb") as f:
+                f.write(img_response.content)
+            
+            # 保存 JSON 数据
+            json_filename = f"json/{img_date}.json"
+            with open(json_filename, "w") as f:
+                json.dump(image_data, f, indent=2)
+            
+            return img_date
+        
+        def copy_todays_wallpaper():
+            # 复制当天图片为固定名称
+            today = datetime.now().strftime('%Y%m%d')
+            source_file = f"pic/{today}.jpg"
+            target_file = "api/today/1920x1080.jpg"
+            
+            if os.path.exists(source_file):
+                # 确保目标目录存在
+                os.makedirs(os.path.dirname(target_file), exist_ok=True)
+                
+                # 复制文件
+                with open(source_file, 'rb') as src, open(target_file, 'wb') as dst:
+                    dst.write(src.read())
+                print(f"Copied {source_file} to {target_file}")
+                return True
+            else:
+                print(f"Today's image {source_file} not found yet")
+                return False
+        
+        # 主执行逻辑
+        current_date = get_bing_image()
+        
+        # 只有当当前图片是今天的时候，才复制到api/today目录
+        today = datetime.now().strftime('%Y%m%d')
+        if current_date == today:
+            copy_todays_wallpaper()
+        else:
+            print(f"Current image date {current_date} is not today {today}, skipping copy")
+        
+        # 更新日期索引
+        dates = set()
+        if os.path.exists('dates.txt'):
+            with open('dates.txt', 'r') as f:
+                dates = set(line.strip() for line in f if line.strip())
+        
+        dates.add(current_date)
+        
+        with open('dates.txt', 'w') as f:
+            for date in sorted(dates):
+                f.write(f"{date}\n")
+        
+        print(f"Available dates: {len(dates)}")
+        EOF
+        
+        python bing_wallpaper.py
 
     - name: Commit and Push changes
       run: |
         git config --local user.email "action@github.com"
         git config --local user.name "GitHub Action"
         git add .
-        git commit -m "Update Bing picture for $(date +%Y%m%d)" || exit 0
+        git commit -m "Update Bing wallpaper - $(date +%Y%m%d-%H%M%S)" || echo "No changes to commit"
         git push
