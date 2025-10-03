@@ -6,7 +6,6 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: read
   pages: write
   id-token: write
 
@@ -20,47 +19,63 @@ jobs:
     - name: Setup Pages
       uses: actions/configure-pages@v4
       
-    - name: Create website structure
+    - name: Create basic site structure
       run: |
-        # 创建必要的网站文件
-        echo "你的域名.com" > CNAME
-        touch .nojekyll
+        # 确保必要的目录存在
+        mkdir -p api/today pic json
         
-        # 创建主页
+        # 如果api/today/1920x1080.jpg不存在，创建一个占位符
+        if [ ! -f "api/today/1920x1080.jpg" ] && [ -f "pic/$(date +%Y%m%d).jpg" ]; then
+          cp "pic/$(date +%Y%m%d).jpg" "api/today/1920x1080.jpg"
+          echo "使用今日图片作为初始壁纸"
+        fi
+        
+        # 创建简单的首页
         cat > index.html << 'EOF'
         <!DOCTYPE html>
         <html>
         <head>
             <title>Bing Wallpaper API</title>
-            <meta http-equiv="refresh" content="0; url=/api/">
+            <style>
+                body { font-family: Arial, sans-serif; margin: 40px; }
+                .endpoint { background: #f5f5f5; padding: 15px; margin: 10px 0; border-radius: 5px; }
+            </style>
         </head>
         <body>
-            <p>Redirecting to API documentation...</p>
+            <h1>Bing Wallpaper API</h1>
+            <p>自动获取并提供Bing每日壁纸</p>
+            
+            <div class="endpoint">
+                <h3>今日壁纸</h3>
+                <code>GET /api/today/1920x1080.jpg</code>
+                <p><a href="/api/today/1920x1080.jpg">查看今日壁纸</a></p>
+            </div>
+            
+            <div class="endpoint">
+                <h3>状态</h3>
+                <p>最后更新: <span id="lastUpdate">Loading...</span></p>
+                <p>可用图片数量: <span id="imageCount">Loading...</span></p>
+            </div>
+            
+            <script>
+                // 简单的状态检查
+                fetch('/api/today/1920x1080.jpg')
+                    .then(response => {
+                        document.getElementById('lastUpdate').textContent = new Date().toLocaleString();
+                        document.getElementById('imageCount').textContent = response.ok ? '正常' : '无图片';
+                    })
+                    .catch(error => {
+                        document.getElementById('lastUpdate').textContent = '检查失败';
+                        document.getElementById('imageCount').textContent = '错误';
+                    });
+            </script>
         </body>
         </html>
         EOF
         
-        # 确保api目录存在
-        mkdir -p api/today
-        
-        # 如果api/today/1920x1080.jpg不存在，创建一个占位符
-        if [ ! -f "api/today/1920x1080.jpg" ]; then
-          echo "Creating placeholder image file"
-          mkdir -p api/today
-          # 创建一个简单的SVG作为占位符
-          cat > api/today/1920x1080.jpg.html << 'EOF'
-        <!DOCTYPE html>
-        <html>
-        <head>
-            <title>Bing Wallpaper</title>
-        </head>
-        <body>
-            <p>Wallpaper will be available after the first successful update.</p>
-            <p>Check the GitHub Actions for update status.</p>
-        </body>
-        </html>
-        EOF
-        fi
+        # 显示生成的文件结构
+        echo "生成的文件结构:"
+        find . -name "*.jpg" -o -name "*.html" -o -name "*.json" | head -20
     
     - name: Upload artifact
       uses: actions/upload-pages-artifact@v3
